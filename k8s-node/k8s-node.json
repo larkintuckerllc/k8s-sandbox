@@ -1,0 +1,67 @@
+{
+  "variables": {
+    "project_id": "",
+    "zone": ""
+  },
+  "builders": [
+    {
+      "image_name": "k8s-node-{{timestamp}}",
+      "project_id": "{{user `project_id`}}",
+      "source_image_family": "ubuntu-2004-lts",
+      "ssh_username": "packer",
+      "type": "googlecompute",
+      "zone": "{{user `zone`}}"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": [
+        "echo 'APT UPGRADE #####'",
+        "sudo apt-get update",
+        "sudo apt-get upgrade -y",
+        "echo 'BRIDGED TRAFFIC #####'",
+        "sudo modprobe br_netfilter"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "./k8s.conf",
+      "destination": "/tmp/"
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "sudo cp /tmp/k8s.conf /etc/sysctl.d",
+        "sudo sysctl --system",
+        "echo X RUNTIME #####",
+        "sudo apt-get update && sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common gnupg2",
+        "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+        "sudo add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs)  stable\"",
+        "sudo apt-get update && sudo apt-get install -y containerd.io=1.2.13-2 docker-ce=5:19.03.11~3-0~ubuntu-$(lsb_release -cs) docker-ce-cli=5:19.03.11~3-0~ubuntu-$(lsb_release -cs)"
+      ]
+    },
+    {
+      "type": "file",
+      "source": "./daemon.json",
+      "destination": "/tmp/"
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "sudo cp /tmp/daemon.json /etc/docker",
+        "sudo mkdir -p /etc/systemd/system/docker.service.d",
+        "sudo systemctl daemon-reload",
+        "sudo systemctl restart docker",
+        "sudo systemctl enable docker",
+        "sudo apt-get update && sudo apt-get install -y apt-transport-https curl",
+        "curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -",
+        "cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list\ndeb https://apt.kubernetes.io/ kubernetes-xenial main\nEOF",
+        "sudo apt-get update",
+        "sudo apt-get install -y kubelet kubeadm kubectl",
+        "sudo apt-mark hold kubelet kubeadm kubectl"
+      ]
+    }
+  ]
+}
+

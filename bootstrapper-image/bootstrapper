@@ -1,0 +1,31 @@
+#!/bin/sh
+
+TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token) 
+ID=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 6 | head -n 1)
+SECRET=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
+NOW=$(date +'%s')
+EXPIRES=$(($NOW + 86400))
+EXPIRATION=$(date -u --date="@$EXPIRES" +'%Y-%m-%dT%H:%M:%SZ')
+
+cat <<EOF | kubectl --token=$TOKEN apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bootstrap-token-$ID
+  namespace: kube-system
+type: bootstrap.kubernetes.io/token
+stringData:
+  auth-extra-groups: system:bootstrappers:kubeadm:default-node-token
+  description: bootstrapper
+  expiration: $EXPIRATION
+  token-id: $ID
+  token-secret: $SECRET
+  usage-bootstrap-authentication: "true"
+  usage-bootstrap-signing: "true"
+EOF
+
+gcloud secrets describe bootstrapper-id && gcloud secrets delete bootstrapper-id --quiet
+echo $ID | gcloud secrets create bootstrapper-id --data-file=-
+gcloud secrets describe bootstrapper-secret && gcloud secrets delete bootstrapper-secret --quiet
+echo $SECRET | gcloud secrets create bootstrapper-secret --data-file=-
+
